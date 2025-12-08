@@ -14,7 +14,7 @@ def get_token():
     TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 
     assert TOKEN, 'Token not found in .env'
-    assert TOKEN=='your_discord_bot_token_here', 'Token not found in .env'
+    assert TOKEN!='your_discord_bot_token_here', 'Token not found in .env'
 
     return TOKEN
 
@@ -31,7 +31,7 @@ def run_bot():
 
     @client.event
     async def on_ready():
-        print(f'We have logged in as {client.user}')
+        print(f'Successfully logged in as {client.user}')
 
     @client.event
     async def on_message(message):
