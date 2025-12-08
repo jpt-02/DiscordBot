@@ -1,16 +1,29 @@
+# Imports
+
 import discord
+import os
+from dotenv import load_dotenv
+
+# Functions
 
 def get_token():
     '''
     Retrieves the bot token from a secure location
     '''
-    # In a real application, retrieve this from an environment variable or secure vault
-    return 'your token here'
+    load_dotenv()
+    TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+
+    assert TOKEN, 'Token not found in .env'
+    assert TOKEN=='your_discord_bot_token_here', 'Token not found in .env'
+
+    return TOKEN
 
 def run_bot():
     '''
     Runs the bot
     '''
+    TOKEN = get_token()
+
     intents = discord.Intents.default()
     intents.message_content = True
 
@@ -28,4 +41,9 @@ def run_bot():
         if message.content.startswith('$hello'):
             await message.channel.send('Hello!')
 
-    client.run('your token here')  
+    client.run(TOKEN) 
+
+
+# Main Execution
+if __name__ == '__main__':
+    run_bot()
