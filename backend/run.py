@@ -44,7 +44,7 @@ def run_bot(TOKEN):
     intents.message_content = True
     intents.members = True
 
-    bot = commands.Bot(command_prefix='!', intents=intents)
+    bot = commands.Bot(command_prefix=';;', intents=intents)
     async def load_cogs():
         """Loads all Python files (cogs) found in the 'cogs' directory."""
         for filename in os.listdir(get_cogs_dir()):
