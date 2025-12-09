@@ -71,5 +71,3 @@ def run_bot(TOKEN):
 if __name__ == '__main__':
     TOKEN = get_token()
     run_bot(TOKEN)
-
-#print(os.listdir())
