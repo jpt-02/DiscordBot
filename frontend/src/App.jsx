@@ -1,35 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useEffect } from 'react';
+import './App.css'; 
+
+const API_BASE_URL = 'http://localhost:5000'; 
 
 function App() {
-  const [count, setCount] = useState(0)
+  // Only need state for fetching stats
+  const [botStats, setBotStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [errorStats, setErrorStats] = useState(null);
+
+  // --- Stats Fetching (GET Request to /api/stats) ---
+
+  const fetchBotStats = () => {
+    fetch(`${API_BASE_URL}/api/stats`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        setBotStats(data);
+        setErrorStats(null);
+      })
+      .catch(err => {
+        console.error("Fetch stats error:", err);
+        setErrorStats("Could not connect to the API server. Check Flask terminal.");
+        setBotStats(null);
+      })
+      .finally(() => {
+        setLoadingStats(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchBotStats();
+  }, []); // Run only once on component load
+
+  // --- Rendering ---
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <div className="App-container">
+      <h1>Discord Bot Status Panel</h1>
+      <p className="note">Data fetched from SQLIte DB via Flask API on port 5000</p>
+
+      {/* Bot Stats Display */}
+      <section className="stats-section">
+        <h2>Live Bot Statistics (GET)</h2>
+        {loadingStats && <p>Loading stats from API...</p>}
+        {errorStats && <p className="error-message">Error: {errorStats}</p>}
+        
+        {botStats && (
+          <div className="status-card">
+            <p>Status: <strong style={{color: botStats.status === 'Online' ? 'green' : 'red'}}>{botStats.status}</strong></p>
+            <p>Guilds: <strong>{botStats.guild_count}</strong></p>
+            <p>Total Members: <strong>{botStats.total_members}</strong></p>
+            <p>Last Updated: {new Date(botStats.last_updated).toLocaleTimeString()}</p>
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
 
-export default App
+export default App;
