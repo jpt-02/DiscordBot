@@ -35,7 +35,6 @@ def run_bot(cogs_dir):
     async def load_cogs():
         """Loads all Python files (cogs) found in the 'cogs' directory."""
         for filename in os.listdir(cogs_dir):
-            print(filename)
             # Check if the file is a Python file and not a utility file
             if filename.endswith('.py') and not filename.startswith('__'):
                 try:

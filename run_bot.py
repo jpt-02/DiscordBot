@@ -17,7 +17,7 @@ def get_cogs_dir():
     # Define the path to the cogs folder using the determined base_path
     bot_dir = os.path.join(base_path, 'bot_logic')
     cogs_dir = os.path.join(bot_dir, 'cogs')
-    print(cogs_dir)
+    #print(cogs_dir)
     return cogs_dir
 
 bot.run_bot(get_cogs_dir())
