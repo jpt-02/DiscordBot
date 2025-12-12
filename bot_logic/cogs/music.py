@@ -83,11 +83,20 @@ class MusicCommands(commands.Cog):
         '''
         Returns true if bot is in a VC in the server where a user is commanding it, else False
         '''
+        if ctx.voice_client is not None:
+            return True
+        else:
+            return False
 
-    async def join(self,ctx):
+    async def join(self,ctx,target_vc):
         '''
-        Joins the VC that the command author is in.
+        Joins a VC.
         '''
+        if not self.in_vc(ctx):
+            await target_vc.connect()
+        else:
+            await ctx.voice_client.move_to(target_vc)
+
     
     async def queue_show(self,ctx):
         '''
@@ -158,7 +167,11 @@ class MusicCommands(commands.Cog):
         '''
         Calls join
         '''
-    
+        if ctx.author.voice is None:
+            await ctx.send("Join a VC first")
+            return
+        target_vc = ctx.author.voice.channel
+        await self.join(ctx,target_vc)
 
 
 # Setup function required to load cog
