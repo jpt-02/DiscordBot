@@ -19,7 +19,10 @@ YDL_OPTIONS = {
     }
 }
 
-link = 'https://www.youtube.com/watch?v=yBuub4Xe1mw&list=RDyBuub4Xe1mw&start_radio=1'
+link = 'https://www.youtube.com/shorts/nGNVMbKGyjc'
+
+
+query = 'ytsearch:' +'black dog'
 
 try:
     with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
@@ -40,10 +43,12 @@ except Exception as e:
 
 
 
-#if info is not None:
-#    for key in info:
-#        print(key)
+if info is not None:
+    for key in info:
+        print(key)
 
-print('entries' in info)
+print(info['title'])
+
+#print('entries' in info)
 
 # title, duration, url

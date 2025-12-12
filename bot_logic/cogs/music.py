@@ -22,10 +22,13 @@ class Player():
     def __init__(self, serverID):
         self.serverID = serverID
         self.isPlaying = False
-        self.queue = []
+        self.queuelist = []
 
     def _makelink(self, query):
-        return
+        if 'youtube.com' in query or 'youtu.be' in query:
+            return query
+        else:
+            return 'ytsearch:'+query
     
     def download(self, query):
         link = self._makelink(query)
@@ -46,7 +49,7 @@ class Player():
             info = {'error', f"An unexpected non-download error occurred: {e}"}
 
         if 'entries' in info:
-            info = info['entries'][0] # Handles playlists
+            info = info['entries'][0] # Handles playlists and searches
         
         return info
 
@@ -57,47 +60,86 @@ class MusicCommands(commands.Cog):
         self.bot = bot
         self.playerdict = {} # { guild_id : Player object }
 
-    def get_player(self, guild_id):
+    def convert_time(seconds):
+        '''
+        Turns duration into mm:ss and returns it
+        '''
+        minutes = seconds // 60
+        remainder_seconds = seconds % 60
+        if remainder_seconds < 10:
+            remainder_seconds = '0' + str(remainder_seconds)
+        return str(minutes) + ':' + str(remainder_seconds)
+
+    def get_player(self, ctx):
+        '''
+        Returns the player object associated with a server ID.
+        '''
+        guild_id = ctx.guild.id
         if guild_id not in self.playerdict:
             self.playerdict[guild_id] = Player(guild_id)
         return self.playerdict[guild_id]
     
-    async def queue(self,ctx,info):
+    def in_vc(self,ctx):
         '''
-        Adds an info dictionary to the queue. Must inherit ctx from a command
+        Returns true if bot is in a VC in the server where a user is commanding it, else False
         '''
+
+    async def join(self,ctx):
+        '''
+        Joins the VC that the command author is in.
+        '''
+    
+    async def queue_show(self,ctx):
+        '''
+        Displays the queue in chat. If queue is empty, says so.
+        '''
+        player = self.get_player(ctx)
+
+    async def queue_add(self,ctx,info):
+        '''
+        Adds an info dictionary to the queue.
+        '''
+        player = self.get_player(ctx)
     
     async def playnext(self,ctx,guild_id):
         '''
-        Plays whatever is next in the queue. Must inherit ctx from a command
+        Plays whatever is next in the queue.
         '''
+        player = self.get_player(ctx)
     
     async def resume(self,ctx):
         '''
-        Resumes music. Must inherit ctx from a command
+        Resumes music.
         '''
+        player = self.get_player(ctx)
+
+    async def pause(self,ctx):
+        '''
+        Pauses music.
+        '''
+        player = self.get_player(ctx)
 
     
     @commands.command(name='skip')
-    async def skip(self,ctx):
+    async def skip_command(self,ctx):
         '''
         Mainly handles playnext
         '''
 
     @commands.command(name='play')
-    async def play(self,ctx,*,query:str):
+    async def play_command(self,ctx,*,query:str):
         '''
         Resumes paused music, queues if done with query
         If queue is empty, calls queue and playnext
         If queue is not empty, calls queue
         '''
-        player = self.get_player(ctx.guild.id) # get the player object for the server
 
     @commands.command(name='pause')
-    async def pause(self,ctx):
+    async def pause_command(self,ctx):
         '''
-        Pauses music
+        calls pause
         '''
+        await self.pause(ctx)
 
     @commands.command(name='resume')
     async def resume_command(self,ctx):
@@ -106,12 +148,16 @@ class MusicCommands(commands.Cog):
         '''
     
     @commands.command(name='queue')
-    async def showqueue(self,ctx,*,query:str):
+    async def showqueue_command(self,ctx,*,query:str):
         '''
-        Show the queue.
+        Show the queue or add a query to the queue
         '''
 
-
+    @commands.command(name='join')
+    async def join_command(self,ctx):
+        '''
+        Calls join
+        '''
     
 
 
