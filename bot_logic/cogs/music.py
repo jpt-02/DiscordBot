@@ -1,4 +1,5 @@
 from discord.ext import commands
+import discord
 import yt_dlp
 
 YDL_OPTIONS = {
@@ -22,15 +23,26 @@ class Player():
     def __init__(self, serverID):
         self.serverID = serverID
         self.isPlaying = False
+        self.current_track_repr = ''
         self.queuelist = []
 
+    def _convert_time(self,seconds):
+        '''
+        Turns duration into mm:ss and returns it
+        '''
+        minutes = seconds // 60
+        remainder_seconds = seconds % 60
+        if remainder_seconds < 10:
+            remainder_seconds = '0' + str(remainder_seconds)
+        return '(' + str(minutes) + ':' + str(remainder_seconds) + ')'
+    
     def _makelink(self, query):
         if 'youtube.com' in query or 'youtu.be' in query:
             return query
         else:
             return 'ytsearch:'+query
     
-    def download(self, query):
+    def _download(self, query):
         link = self._makelink(query)
         try:
             with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
@@ -51,7 +63,35 @@ class Player():
         if 'entries' in info:
             info = info['entries'][0] # Handles playlists and searches
         
+        if 'url' not in info:
+            info.update({'error':'Could not find streamable audio source.'})
+
+        title = info['title'] if 'title' in info else ''
+        duration = self._convert_time(info['duration']) if 'duration' in info else ''
+
+        info.update({'discord_repr':title +' '+duration})
         return info
+    
+    def queue_add(self,query):
+        info = self._download(query)
+        if 'error' not in info:
+            self.queuelist.append(info)
+            return 'Added ' + info['discord_repr'] + ' to the queue'
+        else:
+            return 'Error: ' + info['error']
+    
+    def queue_pop(self):
+        if len(self.queuelist) != 0:
+            self.queuelist.pop(0)
+
+    def repr_queue(self):
+        if len(self.queuelist) == 0:
+            return 'Queue is empty'
+        else:
+            returnstring = '**CURRENT QUEUE**'
+            for i in range(len(self.queuelist)):
+                returnstring = returnstring + '\n' + str(i+1) + '. ' + self.queuelist[i]['discord_repr']
+            return returnstring
 
 
 
@@ -59,16 +99,6 @@ class MusicCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.playerdict = {} # { guild_id : Player object }
-
-    def convert_time(seconds):
-        '''
-        Turns duration into mm:ss and returns it
-        '''
-        minutes = seconds // 60
-        remainder_seconds = seconds % 60
-        if remainder_seconds < 10:
-            remainder_seconds = '0' + str(remainder_seconds)
-        return str(minutes) + ':' + str(remainder_seconds)
 
     def get_player(self, ctx):
         '''
@@ -88,60 +118,132 @@ class MusicCommands(commands.Cog):
         else:
             return False
 
-    async def join(self,ctx,target_vc):
+    def get_queue(self,ctx):
         '''
-        Joins a VC.
+        Returns the queue for a context dependent player. Queue is a list of info dicts
         '''
-        if not self.in_vc(ctx):
-            await target_vc.connect()
-        else:
-            await ctx.voice_client.move_to(target_vc)
-
+        player = self.get_player(ctx)
+        queuelist = player.queuelist
+        return queuelist
     
-    async def queue_show(self,ctx):
+    def get_queue_repr(self,ctx):
         '''
-        Displays the queue in chat. If queue is empty, says so.
+        Returns the text list of the queue items for a context dependent player
         '''
         player = self.get_player(ctx)
+        reprstring = player.repr_queue()
+        return reprstring
 
-    async def queue_add(self,ctx,info):
+    def queue_add(self,ctx,query):
         '''
-        Adds an info dictionary to the queue.
-        '''
-        player = self.get_player(ctx)
-    
-    async def playnext(self,ctx,guild_id):
-        '''
-        Plays whatever is next in the queue.
+        Adds an info dictionary to the queue for a context dependent player
         '''
         player = self.get_player(ctx)
+        return player.queue_add(query)
+
+    async def join(self,ctx):
+        '''
+        Joins a VC based on context dependence
+        '''
+        player = self.get_player(ctx) # Initialize a player, dont do anything with it
+        target_vc = None
+        if ctx.author.voice is not None:
+            target_vc = ctx.author.voice.channel
+        #if target_vc is not None:
+            if not self.in_vc(ctx):
+                await target_vc.connect()
+            else:
+                await ctx.voice_client.move_to(target_vc)
     
     async def resume(self,ctx):
         '''
-        Resumes music.
+        Resumes music for a context dependent player
         '''
         player = self.get_player(ctx)
 
     async def pause(self,ctx):
         '''
-        Pauses music.
+        Pauses music for a context dependent player
         '''
         player = self.get_player(ctx)
+
+
+    def after_play(self,ctx):
+        player = self.get_player(ctx)
+        player.isPlaying=False
+        self.bot.loop.create_task(self.playnext(ctx))
+
+    async def playnext(self,ctx):
+        '''
+        Plays whatever is next in the queue for a context dependent player.
+        Automatically play the next in queue when done
+        Only non-command that is allowed to speak because it runs automatically
+        '''
+        player = self.get_player(ctx)
+        if player.isPlaying: # Do nothing if already playing
+            return
+        
+        queue = self.get_queue(ctx)
+        if len(queue) == 0: # Do nothing if queue is empty
+            return
+        
+        target_info = queue[0]
+        player.current_track_repr = target_info['discord_repr']
+        target_url = target_info['url']
+
+        try:
+            voice_client = ctx.voice_client
+            # code for making voice client play audio
+            source = await discord.FFmpegOpusAudio.from_probe(
+                target_url, 
+                # FFmpeg options for streaming stability (same as those passed to yt-dlp)
+                before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+                executable='ffmpeg' # Ensure FFmpeg is accessible in your environment PATH
+            )
+
+            voice_client.play(source, after=lambda: self.after_play(ctx)) # lambda - this may not be correct syntax
+            await ctx.send(player.current_track_repr + ' is now playing.')
+            player.isPlaying = True
+            player.queue_pop()
+
+
+        except Exception as e:
+            await ctx.send(f'Error playing {player.current_track_repr}: {e}')
+            player.queue_pop()
+            await self.playnext(ctx)
 
     
     @commands.command(name='skip')
     async def skip_command(self,ctx):
         '''
-        Mainly handles playnext
+        Skips the currently playing song.
         '''
+        if self.in_vc(ctx) and ctx.voice_client.is_playing():
+            # Stop the current song, which triggers the 'after' callback in playnext 
+            # to remove the song and start the next one automatically.
+            ctx.voice_client.stop()
+            await ctx.send('Skipped track.')
+        else:
+            await ctx.send('Not currently playing anything.')
 
     @commands.command(name='play')
-    async def play_command(self,ctx,*,query:str):
+    async def play_command(self,ctx,*,query=None):
         '''
-        Resumes paused music, queues if done with query
-        If queue is empty, calls queue and playnext
-        If queue is not empty, calls queue
+        Resumes paused music, queues if called with query
+        Calls queue_add, which handles whether it is empty or not
         '''
+        if query is None:
+            await self.resume(ctx)
+            return
+        if (ctx.author.voice is None) and (not self.in_vc(ctx)): #if author is not in VC and neither is bot
+            await ctx.send("Join a VC first")
+            return
+        await self.join(ctx) # Joins a VC
+        
+        message = self.queue_add(ctx,query)
+        await ctx.send(message) # Gives message that queue has been updated
+
+        await self.playnext(ctx) #Calls playnext to initialize loop
 
     @commands.command(name='pause')
     async def pause_command(self,ctx):
@@ -155,12 +257,19 @@ class MusicCommands(commands.Cog):
         '''
         Calls resume
         '''
+        await self.resume(ctx)
     
     @commands.command(name='queue')
-    async def showqueue_command(self,ctx,*,query:str):
+    async def queue_command(self,ctx,*,query=None):
         '''
         Show the queue or add a query to the queue
         '''
+        if query is None:
+            await ctx.send(self.get_queue_repr(ctx))
+            return
+        else:
+            message = self.queue_add(ctx,query)
+            await ctx.send(message)
 
     @commands.command(name='join')
     async def join_command(self,ctx):
@@ -170,8 +279,11 @@ class MusicCommands(commands.Cog):
         if ctx.author.voice is None:
             await ctx.send("Join a VC first")
             return
-        target_vc = ctx.author.voice.channel
-        await self.join(ctx,target_vc)
+        await self.join(ctx)
+
+    #clear command
+    #leave command
+    #figure out what happens when bot is disconnected, maybe have a listener clear the queue idk
 
 
 # Setup function required to load cog

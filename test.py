@@ -24,30 +24,57 @@ link = 'https://www.youtube.com/shorts/nGNVMbKGyjc'
 
 query = 'ytsearch:' +'black dog'
 
-try:
-    with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-        info = ydl.extract_info(link, download=False)
-except yt_dlp.utils.DownloadError as e:
-    error_message = str(e)
-    if 'Private video' in error_message or 'unavailable' in error_message:
-        info = {'error',"Handling Error: Video is private or unavailable."}
-    elif 'geographical region' in error_message:
-        info = {'error',"Handling Error: Video is geographically restricted."}
-    elif 'Age-restricted' in error_message:
-        info = {'error',"Handling Error: Video is age-restricted and authentication failed."}
+def _convert_time(seconds):
+    '''
+    Turns duration into mm:ss and returns it
+    '''
+    minutes = seconds // 60
+    remainder_seconds = seconds % 60
+    if remainder_seconds < 10:
+        remainder_seconds = '0' + str(remainder_seconds)
+    return '(' + str(minutes) + ':' + str(remainder_seconds) + ')'
+
+def _makelink(query):
+    if 'youtube.com' in query or 'youtu.be' in query:
+        return query
     else:
-        info = {'error',"Handling Error: Unknown download/network error."}
-except Exception as e:
-    info = {'error', f"An unexpected non-download error occurred: {e}"}
+        return 'ytsearch:'+query
+
+def _download(query):
+    link = _makelink(query)
+    try:
+        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+            info = ydl.extract_info(link, download=False)
+    except yt_dlp.utils.DownloadError as e:
+        error_message = str(e)
+        if 'Private video' in error_message or 'unavailable' in error_message:
+            info = {'error',"Video is private or unavailable."}
+        elif 'geographical region' in error_message:
+            info = {'error',"Video is geographically restricted."}
+        elif 'Age-restricted' in error_message:
+            info = {'error',"Video is age-restricted and authentication failed."}
+        else:
+            info = {'error',"Unknown download/network error."}
+    except Exception as e:
+        info = {'error', f"An unexpected non-download error occurred: {e}"}
+
+    if 'entries' in info:
+        info = info['entries'][0] # Handles playlists and searches
+    
+    if 'url' not in info:
+        info.update({'error':'Could not find streamable audio source.'})
+
+    title = info['title'] if 'title' in info else ''
+    duration = _convert_time(info['duration']) if 'duration' in info else ''
+
+    info.update({'discord_repr':title +''+duration})
+    return info
 
 
+info = _download('anything')
 
-
-if info is not None:
-    for key in info:
-        print(key)
-
-print(info['title'])
+print(type(info['duration']))
+print(info['duration'])
 
 #print('entries' in info)
 
