@@ -23,6 +23,7 @@ class Player():
     def __init__(self, serverID):
         self.serverID = serverID
         self.isPlaying = False
+        self.isPaused = False
         self.current_track_repr = ''
         self.queuelist = []
 
@@ -76,7 +77,7 @@ class Player():
         info = self._download(query)
         if 'error' not in info:
             self.queuelist.append(info)
-            return 'Added ' + info['discord_repr'] + ' to the queue'
+            return 'Queued ' + info['discord_repr']
         else:
             return 'Error: ' + info['error']
     
@@ -140,6 +141,13 @@ class MusicCommands(commands.Cog):
         '''
         player = self.get_player(ctx)
         return player.queue_add(query)
+    
+    def clear(self,ctx):
+        '''
+        Clears the queue
+        '''
+        player = self.get_player(ctx)
+        player.queuelist = []
 
     async def join(self,ctx):
         '''
@@ -155,22 +163,44 @@ class MusicCommands(commands.Cog):
             else:
                 await ctx.voice_client.move_to(target_vc)
     
-    async def resume(self,ctx):
+    def resume(self,ctx):
         '''
         Resumes music for a context dependent player
         '''
         player = self.get_player(ctx)
+        voice_client = ctx.voice_client
+        
+        if voice_client is not None and voice_client.is_paused():
+            voice_client.resume()
+            player.isPlaying = True
+            player.isPaused = False
 
-    async def pause(self,ctx):
+    def pause(self,ctx):
         '''
         Pauses music for a context dependent player
         '''
         player = self.get_player(ctx)
+        voice_client = ctx.voice_client
+        
+        if voice_client is not None and voice_client.is_playing():
+            voice_client.pause()
+            player.isPlaying = False
+            player.isPaused = True
 
+    async def skip(self,ctx):
+        '''
+        Stops context dependent voice client, which calls after_play
+        '''
+        if ctx.voice_client:
+            ctx.voice_client.stop()
 
     def after_play(self,ctx):
+        #print('after_play called')
         player = self.get_player(ctx)
         player.isPlaying=False
+        queue = self.get_queue(ctx)
+        if len(queue) == 0: # Do nothing if queue is empty
+            return
         self.bot.loop.create_task(self.playnext(ctx))
 
     async def playnext(self,ctx):
@@ -180,8 +210,6 @@ class MusicCommands(commands.Cog):
         Only non-command that is allowed to speak because it runs automatically
         '''
         player = self.get_player(ctx)
-        if player.isPlaying: # Do nothing if already playing
-            return
         
         queue = self.get_queue(ctx)
         if len(queue) == 0: # Do nothing if queue is empty
@@ -201,8 +229,8 @@ class MusicCommands(commands.Cog):
                 executable='ffmpeg' # Ensure FFmpeg is accessible in your environment PATH
             )
 
-            voice_client.play(source, after=lambda: self.after_play(ctx)) # lambda - this may not be correct syntax
-            await ctx.send(player.current_track_repr + ' is now playing.')
+            voice_client.play(source, after=lambda error: self.after_play(ctx)) # lambda - this may not be correct syntax
+            await ctx.send('Now playing ' + player.current_track_repr)
             player.isPlaying = True
             player.queue_pop()
 
@@ -219,12 +247,11 @@ class MusicCommands(commands.Cog):
         Skips the currently playing song.
         '''
         if self.in_vc(ctx) and ctx.voice_client.is_playing():
-            # Stop the current song, which triggers the 'after' callback in playnext 
-            # to remove the song and start the next one automatically.
-            ctx.voice_client.stop()
-            await ctx.send('Skipped track.')
+            await self.skip(ctx)
+            player = self.get_player(ctx)
+            await ctx.send('Skipped ' + player.current_track_repr)
         else:
-            await ctx.send('Not currently playing anything.')
+            return
 
     @commands.command(name='play')
     async def play_command(self,ctx,*,query=None):
@@ -232,8 +259,9 @@ class MusicCommands(commands.Cog):
         Resumes paused music, queues if called with query
         Calls queue_add, which handles whether it is empty or not
         '''
+        player = self.get_player(ctx)
         if query is None:
-            await self.resume(ctx)
+            self.resume(ctx)
             return
         if (ctx.author.voice is None) and (not self.in_vc(ctx)): #if author is not in VC and neither is bot
             await ctx.send("Join a VC first")
@@ -243,21 +271,26 @@ class MusicCommands(commands.Cog):
         message = self.queue_add(ctx,query)
         await ctx.send(message) # Gives message that queue has been updated
 
-        await self.playnext(ctx) #Calls playnext to initialize loop
+        if player.isPaused:
+            self.resume(ctx) # Always resume if play is called, even with query
+            return
+
+        if not player.isPlaying:
+            await self.playnext(ctx) #Calls playnext to initialize loop
 
     @commands.command(name='pause')
     async def pause_command(self,ctx):
         '''
         calls pause
         '''
-        await self.pause(ctx)
+        self.pause(ctx)
 
     @commands.command(name='resume')
     async def resume_command(self,ctx):
         '''
         Calls resume
         '''
-        await self.resume(ctx)
+        self.resume(ctx)
     
     @commands.command(name='queue')
     async def queue_command(self,ctx,*,query=None):
@@ -281,9 +314,17 @@ class MusicCommands(commands.Cog):
             return
         await self.join(ctx)
 
-    #clear command
+    @commands.command(name='clear')
+    async def clear_command(self,ctx):
+        '''
+        Calls clear
+        '''
+        self.clear(ctx)
+        await ctx.send('Queue Cleared')
+
     #leave command
     #figure out what happens when bot is disconnected, maybe have a listener clear the queue idk
+    #when bot is disconnected set is_playing to false, clear the queue
 
 
 # Setup function required to load cog
