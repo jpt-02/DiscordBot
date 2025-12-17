@@ -51,15 +51,15 @@ class Player():
         except yt_dlp.utils.DownloadError as e:
             error_message = str(e)
             if 'Private video' in error_message or 'unavailable' in error_message:
-                info = {'error',"Video is private or unavailable."}
+                info = {'error':"Video is private or unavailable."}
             elif 'geographical region' in error_message:
-                info = {'error',"Video is geographically restricted."}
+                info = {'error':"Video is geographically restricted."}
             elif 'Age-restricted' in error_message:
-                info = {'error',"Video is age-restricted and authentication failed."}
+                info = {'error':"Video is age-restricted and authentication failed."}
             else:
-                info = {'error',"Unknown download/network error."}
+                info = {'error':"Unknown download/network error."}
         except Exception as e:
-            info = {'error', f"An unexpected non-download error occurred: {e}"}
+            info = {'error': f"An unexpected non-download error occurred: {e}"}
 
         if 'entries' in info:
             info = info['entries'][0] # Handles playlists and searches
