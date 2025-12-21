@@ -1,5 +1,5 @@
 from discord.ext import commands
-import discord
+import random
 
 class Messaging(commands.Cog):
     def __init__(self, bot):
@@ -14,17 +14,17 @@ class Messaging(commands.Cog):
         if message.author == self.bot.user:
             return
 
-        if 'ping' in message.content.lower():
-            await message.channel.send('response')
+        if random.random() < 0.001:
+            await message.channel.send('https://cdn.discordapp.com/attachments/267680106229530624/1055197294988906648/image.png')
 
-    @commands.command(name='push')
-    async def push_to_db(self, ctx):
-        guild = ctx.guild
-        guild_name = guild.name
-        guild_id = guild.id
+    #@commands.command(name='push')
+    #async def push_to_db(self, ctx):
+    #    guild = ctx.guild
+    #    guild_name = guild.name
+    #    guild_id = guild.id
 
         #code to test databse here
-        await ctx.send('Pushing ' + str(guild_id) + " to database")
+    #    await ctx.send('Pushing ' + str(guild_id) + " to database")
         
 
 
