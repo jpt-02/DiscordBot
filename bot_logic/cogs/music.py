@@ -1,6 +1,7 @@
 from discord.ext import commands
 import discord
 import yt_dlp
+import asyncio
 
 YDL_OPTIONS = {
     'skip_download': True,
@@ -26,6 +27,8 @@ class Player():
         self.isPaused = False
         self.current_track_repr = ''
         self.queuelist = []
+        self.timer_running = False
+        self.leaveflags = [False,False,False]
 
     def _convert_time(self,seconds):
         '''
@@ -94,6 +97,7 @@ class Player():
                 returnstring = returnstring + '\n' + str(i+1) + '. ' + self.queuelist[i]['discord_repr']
             return returnstring
 
+    
 
 
 class MusicCommands(commands.Cog):
@@ -110,6 +114,15 @@ class MusicCommands(commands.Cog):
             self.playerdict[guild_id] = Player(guild_id)
         return self.playerdict[guild_id]
     
+    async def remove_player(self,ctx):
+        '''
+        removes the player object associated with a server ID
+        '''
+        guild_id = ctx.guild.id
+        if guild_id in self.playerdict:
+            del self.playerdict[guild_id]
+            await ctx.voice_client.disconnect()
+
     def in_vc(self,ctx):
         '''
         Returns true if bot is in a VC in the server where a user is commanding it, else False
@@ -153,15 +166,47 @@ class MusicCommands(commands.Cog):
         '''
         Joins a VC based on context dependence
         '''
-        player = self.get_player(ctx) # Initialize a player, dont do anything with it
-        target_vc = None
+        player = self.get_player(ctx)
+
         if ctx.author.voice is not None:
             target_vc = ctx.author.voice.channel
-        #if target_vc is not None:
             if not self.in_vc(ctx):
                 await target_vc.connect()
             else:
                 await ctx.voice_client.move_to(target_vc)
+
+            if not player.timer_running:
+                self.start_timer(ctx)
+
+    def start_timer(self,ctx):
+        '''
+        Called only after the player is initialzed or the last timer ends
+        '''
+        player = self.get_player(ctx)
+        self.bot.loop.create_task(self.run_timer(ctx))
+        player.timer_running = True
+    
+    async def run_timer(self,ctx):
+        '''
+        Manages timer for bot to auto leave if not in use
+        '''
+        player = self.get_player(ctx)
+        await asyncio.sleep(300)
+        player.leaveflags[0] = True if player.isPlaying == False else False
+        print(f'Flag#1: {player.leaveflags[0]}')
+        await asyncio.sleep(5)
+        player.leaveflags[1] = True if player.isPlaying == False else False
+        print(f'Flag#2: {player.leaveflags[0]}')
+        await asyncio.sleep(5)
+        player.leaveflags[2] = True if player.isPlaying == False else False
+        print(f'Flag#3: {player.leaveflags[0]}')
+
+        if False not in player.leaveflags:
+            await self.remove_player(ctx)
+        else:
+            self.start_timer(ctx)
+
+
     
     def resume(self,ctx):
         '''
@@ -195,12 +240,8 @@ class MusicCommands(commands.Cog):
             ctx.voice_client.stop()
 
     def after_play(self,ctx):
-        #print('after_play called')
         player = self.get_player(ctx)
         player.isPlaying=False
-        queue = self.get_queue(ctx)
-        if len(queue) == 0: # Do nothing if queue is empty
-            return
         self.bot.loop.create_task(self.playnext(ctx))
 
     async def playnext(self,ctx):
@@ -212,7 +253,7 @@ class MusicCommands(commands.Cog):
         player = self.get_player(ctx)
         
         queue = self.get_queue(ctx)
-        if len(queue) == 0: # Do nothing if queue is empty
+        if len(queue) == 0:
             return
         
         target_info = queue[0]
@@ -238,7 +279,9 @@ class MusicCommands(commands.Cog):
         except Exception as e:
             await ctx.send(f'Error playing {player.current_track_repr}: {e}')
             player.queue_pop()
-            await self.playnext(ctx)
+            #await self.playnext(ctx)
+            self.after_play(ctx)
+
 
     
     @commands.command(name='skip')
@@ -260,23 +303,28 @@ class MusicCommands(commands.Cog):
         Calls queue_add, which handles whether it is empty or not
         '''
         player = self.get_player(ctx)
-        if query is None:
-            self.resume(ctx)
-            return
+    
         if (ctx.author.voice is None) and (not self.in_vc(ctx)): #if author is not in VC and neither is bot
             await ctx.send("Join a VC first")
             return
         await self.join(ctx) # Joins a VC
         
-        message = self.queue_add(ctx,query)
-        await ctx.send(message) # Gives message that queue has been updated
+        if query is None:
+            if player.isPaused:
+                self.resume(ctx)
+            if not player.isPlaying:
+                await self.playnext(ctx)
+        
+        else:
+            message = self.queue_add(ctx,query)
+            await ctx.send(message) # Gives message that queue has been updated
 
-        if player.isPaused:
-            self.resume(ctx) # Always resume if play is called, even with query
-            return
+            if player.isPaused:
+                self.resume(ctx) # Always resume if play is called, even with query
+                return
 
-        if not player.isPlaying:
-            await self.playnext(ctx) #Calls playnext to initialize loop
+            if not player.isPlaying:
+                await self.playnext(ctx) #Calls playnext to initialize loop
 
     @commands.command(name='pause')
     async def pause_command(self,ctx):
@@ -321,6 +369,14 @@ class MusicCommands(commands.Cog):
         '''
         self.clear(ctx)
         await ctx.send('Queue Cleared')
+
+    @commands.command(name='killplayer')
+    async def killplayer_command(self,ctx):
+        '''
+        kills the player object so that a new one can be created
+        '''
+        await self.remove_player(ctx)
+
 
     #leave command
     #figure out what happens when bot is disconnected, maybe have a listener clear the queue idk
