@@ -191,13 +191,13 @@ class MusicCommands(commands.Cog):
         Manages timer for bot to auto leave if not in use
         '''
         player = self.get_player(ctx)
-        await asyncio.sleep(300)
+        await asyncio.sleep(100)
         player.leaveflags[0] = True if player.isPlaying == False else False
         print(f'Flag#1: {player.leaveflags[0]}')
-        await asyncio.sleep(5)
+        await asyncio.sleep(100)
         player.leaveflags[1] = True if player.isPlaying == False else False
         print(f'Flag#2: {player.leaveflags[0]}')
-        await asyncio.sleep(5)
+        await asyncio.sleep(100)
         player.leaveflags[2] = True if player.isPlaying == False else False
         print(f'Flag#3: {player.leaveflags[0]}')
 
